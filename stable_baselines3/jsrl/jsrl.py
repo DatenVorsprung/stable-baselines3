@@ -5,6 +5,10 @@ jsrl.py
 Implementation of Jump-Start Reinforcement Learning (JSRL) with various training algorithms
 
 """
+
+import sys
+import time
+
 from typing import Union, Optional
 from pathlib import Path
 from collections import deque
@@ -15,7 +19,7 @@ from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import ActionNoise
 from stable_baselines3.common.type_aliases import RolloutReturn, TrainFreq, TrainFrequencyUnit
-from stable_baselines3.common.utils import should_collect_more_steps
+from stable_baselines3.common.utils import should_collect_more_steps, safe_mean
 from stable_baselines3.common.vec_env import VecEnv
 
 import onnxruntime as ort
