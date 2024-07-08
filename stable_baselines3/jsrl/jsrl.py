@@ -9,7 +9,7 @@ Implementation of Jump-Start Reinforcement Learning (JSRL) with various training
 import sys
 import time
 
-from typing import Union, Optional
+from typing import Union, Optional, List
 from pathlib import Path
 from collections import deque
 
@@ -222,3 +222,6 @@ class JSSAC(SAC):
         callback.on_rollout_end()
 
         return RolloutReturn(num_collected_steps * env.num_envs, num_collected_episodes, continue_training)
+
+    def _excluded_save_params(self) -> List[str]:
+        return super()._excluded_save_params() + ["guide_model"]
