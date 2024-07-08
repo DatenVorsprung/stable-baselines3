@@ -56,7 +56,6 @@ class JSSAC(SAC):
         # init SAC
         super().__init__(policy, env, verbose=verbose, **sac_kwargs)
 
-
     def collect_rollouts(
         self,
         env: VecEnv,
@@ -113,9 +112,9 @@ class JSSAC(SAC):
 
             # Select action randomly or according to policy
             actions_unguided, buffer_actions_unguided = self._sample_action(learning_starts, action_noise, env.num_envs)
-            #actions_guided, _ = self.guide_policy.predict(self.env.unwrapped.state_buf, deterministic=True)
-            #buffer_actions_guided = self.guide_policy.scale_action(actions_guided)
-            model_inputs = {self.guide_model.get_inputs()[0].name: self.env.unwrapped.get_sin_cos_state().cpu().numpy()}
+
+            # create onnx model input; the env needs to have a method called _get_guide_model_obs
+            model_inputs = {self.guide_model.get_inputs()[0].name: self.env.unwrapped._get_guide_model_obs().cpu().numpy()}
             actions_guided = self.guide_model.run(None, model_inputs)[0]
             buffer_actions_guided = actions_guided
 
