@@ -8,6 +8,7 @@ Implementation of Jump-Start Reinforcement Learning (JSRL) with various training
 from typing import Union, Optional
 from pathlib import Path
 
+import numpy as np
 from stable_baselines3.sac.sac import SAC
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.callbacks import BaseCallback
@@ -15,6 +16,8 @@ from stable_baselines3.common.noise import ActionNoise
 from stable_baselines3.common.type_aliases import RolloutReturn, TrainFreq, TrainFrequencyUnit
 from stable_baselines3.common.utils import should_collect_more_steps
 from stable_baselines3.common.vec_env import VecEnv
+
+import onnxruntime as ort
 
 
 class JSSAC(SAC):
@@ -25,9 +28,7 @@ class JSSAC(SAC):
     If not, collect more data.
     Do this until the SACPolicy is acting alone
 
-    :param guide_policy_path: The path to the guide policy .zip
-    :param guide_policy_obs_key: The key in the environments observation dict, that the guide
-        policy uses for predicting actions
+    :param guide_model_path: The path to the guide model .onnx
     :param max_env_steps: The maximum number of steps that the environment can take before
         resetting
     :param n_curricula: The number of curricula (= steps until the exploration policy takes
@@ -37,23 +38,23 @@ class JSSAC(SAC):
     :param sac_kwargs: Keyworded args for the SAC class
     """
 
-    def __init__(self, guide_policy_path: Union[str, Path], guide_policy_obs_key: str,
-                 max_env_steps: int, n_curricula: int, reward_threshold: float, sac_kwargs: dict):
+    def __init__(self, policy, env, guide_model_path: Union[str, Path],
+                 max_env_steps: int, n_curricula: int, reward_threshold: float, sac_kwargs: dict, verbose: int = 1):
 
         # load the guide_policy, it must be trained with SAC in the same environment
         try:
-            self.guide_policy = SAC.load(guide_policy_path, sac_kwargs['env'])
+            self.guide_model = ort.InferenceSession(guide_model_path)
         except:
-            raise ValueError(f'Could not load guide policy from path {guide_policy_path}!')
+            print(f'Could not load guide model from path {guide_model_path}!')
+            #raise ValueError(f'Could not load guide policy from path {guide_model_path}!')
 
         self.n_curricula = n_curricula
-        self.guide_policy_obs_key = guide_policy_obs_key
         self.reward_threshold = reward_threshold
         self.max_env_steps = max_env_steps
         self.current_curriculum = 1
 
         # init SAC
-        super().__init__(**sac_kwargs)
+        super().__init__(policy, env, verbose=verbose, **sac_kwargs)
 
 
     def collect_rollouts(
@@ -109,16 +110,21 @@ class JSSAC(SAC):
             # check, which policy should issue the action: guide_policy or exploration_policy
             # if the number of steps < max_env_steps - (max_env_steps / current_curriculum)
             # -> guide_policy, otherwise exploration_policy
-            if num_collected_steps
 
             # Select action randomly or according to policy
-            actions, buffer_actions = self._sample_action(learning_starts, action_noise, env.num_envs)
+            actions_unguided, buffer_actions_unguided = self._sample_action(learning_starts, action_noise, env.num_envs)
+            #actions_guided, _ = self.guide_policy.predict(self.env.unwrapped.state_buf, deterministic=True)
+            #buffer_actions_guided = self.guide_policy.scale_action(actions_guided)
+            model_inputs = {self.guide_model.get_inputs()[0].name: self.env.unwrapped.get_sin_cos_state().cpu().numpy()}
+            actions_guided = self.guide_model.run(None, model_inputs)[0]
+            buffer_actions_guided = actions_guided
+
+            envs_guide_policy_cond = self.env.unwrapped.time_steps.cpu().numpy() < self.max_env_steps - self.current_curriculum * (self.max_env_steps / self.n_curricula)
+            actions = np.where(envs_guide_policy_cond.reshape(env.num_envs, env.action_space.shape[0]), actions_guided, actions_unguided)
+            buffer_actions = np.where(envs_guide_policy_cond.reshape(env.num_envs, env.action_space.shape[0]), buffer_actions_guided, buffer_actions_unguided)
 
             # Rescale and perform action
             new_obs, rewards, dones, infos = env.step(actions)
-
-            self.num_timesteps += env.num_envs
-            num_collected_steps += 1
 
             # Give access to local variables
             callback.update_locals(locals())
