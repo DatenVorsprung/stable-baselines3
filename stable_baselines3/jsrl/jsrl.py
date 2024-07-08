@@ -117,8 +117,12 @@ class JSSAC(SAC):
             actions_unguided, buffer_actions_unguided = self._sample_action(learning_starts, action_noise, env.num_envs)
 
             # create onnx model input; the env needs to have a method called _get_guide_model_obs
-            model_inputs = {self.guide_model.get_inputs()[0].name: self.env.unwrapped._get_guide_model_obs().cpu().numpy()}
-            actions_guided = self.guide_model.run(None, model_inputs)[0]
+            actions_guided = []
+            for env_idx in range(env.num_envs):
+                model_inputs = {self.guide_model.get_inputs()[0].name: self.env.unwrapped._get_guide_model_obs().cpu().numpy()[env_idx].reshape(1, -1)}
+                actions_guided.append(self.guide_model.run(None, model_inputs)[0])
+
+            actions_guided = np.concatenate(actions_guided, axis=0)
             buffer_actions_guided = actions_guided
 
             envs_guide_policy_cond = self.env.unwrapped.time_steps.cpu().numpy() < self.max_env_steps - self.current_curriculum * (self.max_env_steps / self.n_curricula)
