@@ -59,6 +59,38 @@ class JSSAC(SAC):
         # init SAC
         super().__init__(policy, env, verbose=verbose, **sac_kwargs)
 
+    def _dump_logs(self) -> None:
+        """
+        Write log.
+        """
+        assert self.ep_info_buffer is not None
+        assert self.ep_success_buffer is not None
+
+        time_elapsed = max((time.time_ns() - self.start_time) / 1e9, sys.float_info.epsilon)
+        fps = int((self.num_timesteps - self._num_timesteps_at_start) / time_elapsed)
+        self.logger.record("time/episodes", self._episode_num, exclude="tensorboard")
+        if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
+            self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
+            self.logger.record("rollout/ep_len_mean", safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer]))
+
+        # JSRL specific logging
+        self.logger.record("jsrl/current_curriculum", self.current_curriculum)
+        self.logger.record("jsrl/reward_mean", np.mean(self.reward_mean_buf))
+        if self.reward_baseline is not None:
+            self.logger.record("jsrl/reward_threshold", self.reward_baseline * self.reward_threshold)
+
+        self.logger.record("time/fps", fps)
+        self.logger.record("time/time_elapsed", int(time_elapsed), exclude="tensorboard")
+        self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
+        if self.use_sde:
+            self.logger.record("train/std", (self.actor.get_std()).mean().item())
+
+        if len(self.ep_success_buffer) > 0:
+            self.logger.record("rollout/success_rate", safe_mean(self.ep_success_buffer))
+        # Pass the number of timesteps for tensorboard
+        self.logger.dump(step=self.num_timesteps)
+
+
     def collect_rollouts(
         self,
         env: VecEnv,
