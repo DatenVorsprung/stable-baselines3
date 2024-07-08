@@ -168,6 +168,9 @@ class JSSAC(SAC):
             # Rescale and perform action
             new_obs, rewards, dones, infos = env.step(actions)
 
+            self.num_timesteps += env.num_envs
+            num_collected_steps += 1
+
             # Give access to local variables
             callback.update_locals(locals())
             # Only stop training if return value is False, not when it is None.
