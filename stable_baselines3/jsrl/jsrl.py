@@ -7,6 +7,7 @@ Implementation of Jump-Start Reinforcement Learning (JSRL) with various training
 """
 from typing import Union, Optional
 from pathlib import Path
+from collections import deque
 
 import numpy as np
 from stable_baselines3.sac.sac import SAC
@@ -38,7 +39,7 @@ class JSSAC(SAC):
     :param sac_kwargs: Keyworded args for the SAC class
     """
 
-    def __init__(self, policy, env, guide_model_path: Union[str, Path],
+    def __init__(self, policy, env, guide_model_path: Union[str, Path], n_reward_mean: int,
                  max_env_steps: int, n_curricula: int, reward_threshold: float, sac_kwargs: dict, verbose: int = 1):
 
         # load the guide_policy, it must be trained with SAC in the same environment
@@ -51,7 +52,9 @@ class JSSAC(SAC):
         self.n_curricula = n_curricula
         self.reward_threshold = reward_threshold
         self.max_env_steps = max_env_steps
-        self.current_curriculum = 1
+        self.current_curriculum = 0
+        self.reward_mean_buf = deque(maxlen=n_reward_mean)
+        self.reward_baseline = None
 
         # init SAC
         super().__init__(policy, env, verbose=verbose, **sac_kwargs)
@@ -158,6 +161,21 @@ class JSSAC(SAC):
                     # Log training infos
                     if log_interval is not None and self._episode_num % log_interval == 0:
                         self._dump_logs()
+
+                    # add the latest total reward to the reward_mean buffer
+                    self.reward_mean_buf.append(self.ep_info_buffer[-1]['r'])
+
+                    # check if we have already reached the required number of episodes to calculate the reward mean
+                    if len(self.reward_mean_buf) == self.reward_mean_buf.maxlen:
+                        reward_mean = np.mean(self.reward_mean_buf)
+                        # if it is the first curriculum, calculate the reward baseline
+                        if self.current_curriculum == 0:
+                            self.reward_baseline = reward_mean
+
+                    # check if the reward_mean is above the reward_threshold
+                    if self.reward_baseline is not None and reward_mean >= self.reward_baseline * self.reward_threshold:
+                        self.current_curriculum += 1
+
         callback.on_rollout_end()
 
         return RolloutReturn(num_collected_steps * env.num_envs, num_collected_episodes, continue_training)
