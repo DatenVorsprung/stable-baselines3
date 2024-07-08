@@ -39,8 +39,8 @@ class JSSAC(SAC):
     :param sac_kwargs: Keyworded args for the SAC class
     """
 
-    def __init__(self, policy, env, guide_model_path: Union[str, Path], n_reward_mean: int,
-                 max_env_steps: int, n_curricula: int, reward_threshold: float, sac_kwargs: dict, verbose: int = 1):
+    def __init__(self, policy, env, guide_model_path: Union[str, Path], n_reward_mean: int, n_curricula: int,
+                 reward_threshold: float, sac_kwargs: dict, verbose: int = 1):
 
         # load the guide_policy, it must be trained with SAC in the same environment
         try:
@@ -51,7 +51,7 @@ class JSSAC(SAC):
 
         self.n_curricula = n_curricula
         self.reward_threshold = reward_threshold
-        self.max_env_steps = max_env_steps
+        self.max_env_steps = env.unwrapped.max_episode_length
         self.current_curriculum = 0
         self.reward_mean_buf = deque(maxlen=n_reward_mean)
         self.reward_baseline = None
