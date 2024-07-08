@@ -165,16 +165,16 @@ class JSSAC(SAC):
                     # add the latest total reward to the reward_mean buffer
                     self.reward_mean_buf.append(self.ep_info_buffer[-1]['r'])
 
-                    # check if we have already reached the required number of episodes to calculate the reward mean
-                    if len(self.reward_mean_buf) == self.reward_mean_buf.maxlen:
-                        reward_mean = np.mean(self.reward_mean_buf)
-                        # if it is the first curriculum, calculate the reward baseline
-                        if self.current_curriculum == 0:
-                            self.reward_baseline = reward_mean
+            # check if we have already reached the required number of episodes to calculate the reward mean
+            if len(self.reward_mean_buf) == self.reward_mean_buf.maxlen:
+                reward_mean = np.mean(self.reward_mean_buf)
+                # if it is the first curriculum, calculate the reward baseline
+                if self.current_curriculum == 0:
+                    self.reward_baseline = reward_mean
 
-                    # check if the reward_mean is above the reward_threshold
-                    if self.reward_baseline is not None and reward_mean >= self.reward_baseline * self.reward_threshold:
-                        self.current_curriculum += 1
+            # check if the reward_mean is above the reward_threshold
+            if self.reward_baseline is not None and reward_mean >= self.reward_baseline * self.reward_threshold:
+                self.current_curriculum += 1
 
         callback.on_rollout_end()
 
