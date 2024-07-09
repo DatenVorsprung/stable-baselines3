@@ -57,6 +57,8 @@ class JSSAC(SAC):
         self.reward_threshold = reward_threshold
         self.max_env_steps = env.unwrapped.max_episode_length
         self.current_curriculum = 0
+        self.done_envs = np.zeros(env.num_envs, dtype=bool)
+        self.reward_achieved = False
         self.reward_mean_buf = deque(maxlen=n_reward_mean)
         self.reward_baseline = None
 
@@ -208,16 +210,24 @@ class JSSAC(SAC):
                     # add the latest total reward to the reward_mean buffer
                     self.reward_mean_buf.append(self.ep_info_buffer[-1]['r'])
 
-            # check if we have already reached the required number of episodes to calculate the reward mean
-            if len(self.reward_mean_buf) == self.reward_mean_buf.maxlen:
-                reward_mean = np.mean(self.reward_mean_buf)
-                # if it is the first curriculum, calculate the reward baseline
-                if self.current_curriculum == 0:
-                    self.reward_baseline = reward_mean
+                    # check if we have already reached the required number of episodes to calculate the reward mean
+                    if len(self.reward_mean_buf) == self.reward_mean_buf.maxlen:
+                        reward_mean = np.mean(self.reward_mean_buf)
+                        # if it is the first curriculum, calculate the reward baseline
+                        if self.current_curriculum == 0:
+                            self.reward_baseline = reward_mean
+
+                    self.done_envs[idx] = True
 
             # check if the reward_mean is above the reward_threshold
             if self.reward_baseline is not None and reward_mean >= self.reward_baseline * self.reward_threshold:
+                self.reward_achieved = True
+
+            # check if all environments are done and the reward was achieved to start the next curriculum
+            if self.done_envs.all() and self.reward_achieved:
                 self.current_curriculum += 1
+                self.done_envs = np.zeros(env.num_envs, dtype=bool)
+                self.reward_achieved = False
 
         callback.on_rollout_end()
 
