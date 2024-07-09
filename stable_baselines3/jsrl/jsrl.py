@@ -212,15 +212,14 @@ class JSSAC(SAC):
 
                     # check if we have already reached the required number of episodes to calculate the reward mean
                     if len(self.reward_mean_buf) == self.reward_mean_buf.maxlen:
-                        reward_mean = np.mean(self.reward_mean_buf)
                         # if it is the first curriculum, calculate the reward baseline
                         if self.current_curriculum == 0:
-                            self.reward_baseline = reward_mean
+                            self.reward_baseline = np.mean(self.reward_mean_buf)
 
                     self.done_envs[idx] = True
 
-            # check if the reward_mean is above the reward_threshold
-            if self.reward_baseline is not None and reward_mean >= self.reward_baseline * self.reward_threshold:
+            # check if the mean reward is above the reward_threshold
+            if self.reward_baseline is not None and np.mean(self.reward_mean_buf) >= self.reward_baseline * self.reward_threshold:
                 self.reward_achieved = True
 
             # check if all environments are done and the reward was achieved to start the next curriculum
