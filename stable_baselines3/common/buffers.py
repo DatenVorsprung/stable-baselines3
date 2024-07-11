@@ -193,6 +193,8 @@ class ReplayBuffer(BaseBuffer):
     ):
         super().__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs)
 
+        raise Exception("Wrong buffer used!")
+
         # Adjust buffer size
         self.buffer_size = max(buffer_size // n_envs, 1)
 
@@ -576,14 +578,16 @@ class GPUReplayBuffer(BaseBuffer):
             )
         self.optimize_memory_usage = optimize_memory_usage
 
-        self.observations = th.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=observation_space.dtype)
+        torch_dtype = th.from_numpy(np.zeros((), dtype=observation_space.dtype)).dtype
+        self.observations = th.zeros(size=(self.buffer_size, self.n_envs, *self.obs_shape), dtype=torch_dtype, device=device)
 
         if not optimize_memory_usage:
             # When optimizing memory, `observations` contains also the next observation
-            self.next_observations = th.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=observation_space.dtype, device=device)
+            self.next_observations = th.zeros(size=(self.buffer_size, self.n_envs, *self.obs_shape), dtype=torch_dtype, device=device)
 
+        torch_dtype = th.from_numpy(np.zeros((), dtype=self._maybe_cast_dtype(action_space.dtype))).dtype
         self.actions = th.zeros(
-            (self.buffer_size, self.n_envs, self.action_dim), dtype=self._maybe_cast_dtype(action_space.dtype), device=device
+            (self.buffer_size, self.n_envs, self.action_dim), dtype=torch_dtype, device=device
         )
 
         self.rewards = th.zeros((self.buffer_size, self.n_envs), dtype=th.float32, device=device)
