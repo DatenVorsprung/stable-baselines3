@@ -631,13 +631,18 @@ class GPUReplayBuffer(BaseBuffer):
     ) -> None:
         
         # Convert inputs to tensors TODO only for now, later use tensors as input directly
-        torch_dtype = th.from_numpy(np.zeros((), dtype=self.observation_space.dtype)).dtype
-        obs = th.tensor(obs, dtype=torch_dtype, device=self.device)
-        next_obs = th.tensor(next_obs, dtype=torch_dtype, device=self.device)
-        torch_dtype = th.from_numpy(np.zeros((), dtype=self.action_space.dtype)).dtype
-        action = th.tensor(action, dtype=torch_dtype, device=self.device)
-        reward = th.tensor(reward, dtype=th.float32, device=self.device)
-        done = th.tensor(done, dtype=th.float32, device=self.device)
+        if type(obs) == np.ndarray:
+            torch_dtype = th.from_numpy(np.zeros((), dtype=self.observation_space.dtype)).dtype
+            obs = th.tensor(obs, dtype=torch_dtype, device=self.device)
+        if type(next_obs) == np.ndarray:
+            next_obs = th.tensor(next_obs, dtype=torch_dtype, device=self.device)
+        if type(action) == np.ndarray:
+            torch_dtype = th.from_numpy(np.zeros((), dtype=self.action_space.dtype)).dtype
+            action = th.tensor(action, dtype=torch_dtype, device=self.device)
+        if type(reward) == np.ndarray:
+            reward = th.tensor(reward, dtype=th.float32, device=self.device)
+        if type(done) == np.ndarray:
+            done = th.tensor(done, dtype=th.float32, device=self.device)
 
         # Reshape needed when using multiple envs with discrete observations
         # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
