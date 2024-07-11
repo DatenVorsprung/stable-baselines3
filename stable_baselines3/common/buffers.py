@@ -134,6 +134,12 @@ class BaseBuffer(ABC):
             by reference). This argument is inoperative if the device is not the CPU.
         :return:
         """
+
+        if isinstance(array, th.Tensor):
+            if copy:
+                return array.clone().to(self.device)
+            return array.to(self.device)
+
         if copy:
             return th.tensor(array, device=self.device)
         return th.as_tensor(array, device=self.device)
@@ -624,31 +630,40 @@ class GPUReplayBuffer(BaseBuffer):
         infos: List[Dict[str, Any]],
     ) -> None:
         
-        # TODO
+        # Convert inputs to tensors TODO only for now, later use tensors as input directly
+        torch_dtype = th.from_numpy(np.zeros((), dtype=self.observation_space.dtype)).dtype
+        obs = th.tensor(obs, dtype=torch_dtype, device=self.device)
+        next_obs = th.tensor(next_obs, dtype=torch_dtype, device=self.device)
+        torch_dtype = th.from_numpy(np.zeros((), dtype=self.action_space.dtype)).dtype
+        action = th.tensor(action, dtype=torch_dtype, device=self.device)
+        reward = th.tensor(reward, dtype=th.float32, device=self.device)
+        done = th.tensor(done, dtype=th.float32, device=self.device)
 
         # Reshape needed when using multiple envs with discrete observations
         # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
         if isinstance(self.observation_space, spaces.Discrete):
-            obs = obs.reshape((self.n_envs, *self.obs_shape))
-            next_obs = next_obs.reshape((self.n_envs, *self.obs_shape))
+            obs = obs.view(self.n_envs, *self.obs_shape)
+            next_obs = next_obs.view(self.n_envs, *self.obs_shape)
 
         # Reshape to handle multi-dim and discrete action spaces, see GH #970 #1392
-        action = action.reshape((self.n_envs, self.action_dim))
+        action = action.view(self.n_envs, self.action_dim)
 
         # Copy to avoid modification by reference
-        self.observations[self.pos] = np.array(obs)
+        self.observations[self.pos] = obs
 
         if self.optimize_memory_usage:
-            self.observations[(self.pos + 1) % self.buffer_size] = np.array(next_obs)
+            self.observations[(self.pos + 1) % self.buffer_size] = next_obs
         else:
-            self.next_observations[self.pos] = np.array(next_obs)
+            self.next_observations[self.pos] = next_obs
 
-        self.actions[self.pos] = np.array(action)
-        self.rewards[self.pos] = np.array(reward)
-        self.dones[self.pos] = np.array(done)
+        self.actions[self.pos] = action
+        self.rewards[self.pos] = reward
+        self.dones[self.pos] = done
 
         if self.handle_timeout_termination:
-            self.timeouts[self.pos] = np.array([info.get("TimeLimit.truncated", False) for info in infos])
+            timeouts = th.tensor([info.get("TimeLimit.truncated", False) for info in infos], 
+                                dtype=self.timeouts.dtype, device=self.device)
+            self.timeouts[self.pos] = timeouts
 
         self.pos += 1
         if self.pos == self.buffer_size:
@@ -685,7 +700,7 @@ class GPUReplayBuffer(BaseBuffer):
         # TODO
 
         # Sample randomly the env idx
-        env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
+        env_indices = th.randint(0, self.n_envs, (len(batch_inds),), device=self.device)
 
         if self.optimize_memory_usage:
             next_obs = self._normalize_obs(self.observations[(batch_inds + 1) % self.buffer_size, env_indices, :], env)
@@ -705,9 +720,7 @@ class GPUReplayBuffer(BaseBuffer):
 
     @staticmethod
     def _maybe_cast_dtype(dtype: np.typing.DTypeLike) -> np.typing.DTypeLike:
-        
-        # TODO
-        
+                
         """
         Cast `np.float64` action datatype to `np.float32`,
         keep the others dtype unchanged.
@@ -755,6 +768,8 @@ class DictReplayBuffer(ReplayBuffer):
         handle_timeout_termination: bool = True,
     ):
         super(ReplayBuffer, self).__init__(buffer_size, observation_space, action_space, device, n_envs=n_envs)
+
+        raise Exception("Not good")
 
         assert isinstance(self.obs_shape, dict), "DictReplayBuffer must be used with Dict obs space only"
         self.buffer_size = max(buffer_size // n_envs, 1)
