@@ -15,7 +15,7 @@ from collections import deque
 
 import numpy as np
 from stable_baselines3.sac.sac import SAC
-from stable_baselines3.common.buffers import ReplayBuffer
+from stable_baselines3.common.buffers import GPUReplayBuffer
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import ActionNoise
 from stable_baselines3.common.type_aliases import RolloutReturn, TrainFreq, TrainFrequencyUnit
@@ -102,13 +102,13 @@ class JSSAC(SAC):
         env: VecEnv,
         callback: BaseCallback,
         train_freq: TrainFreq,
-        replay_buffer: ReplayBuffer,
+        replay_buffer: GPUReplayBuffer,
         action_noise: Optional[ActionNoise] = None,
         learning_starts: int = 0,
         log_interval: Optional[int] = None,
     ) -> RolloutReturn:
         """
-        Collect experiences and store them into a ``ReplayBuffer``.
+        Collect experiences and store them into a ``GPUReplayBuffer``.
 
         :param env: The training environment
         :param callback: Callback that will be called at each step

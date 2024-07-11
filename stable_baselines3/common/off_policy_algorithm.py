@@ -11,7 +11,7 @@ import torch as th
 from gymnasium import spaces
 
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.buffers import DictReplayBuffer, ReplayBuffer
+from stable_baselines3.common.buffers import DictReplayBuffer, GPUReplayBuffer
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.noise import ActionNoise, VectorizedActionNoise
 from stable_baselines3.common.policies import BasePolicy
@@ -90,7 +90,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         train_freq: Union[int, Tuple[int, str]] = (1, "step"),
         gradient_steps: int = 1,
         action_noise: Optional[ActionNoise] = None,
-        replay_buffer_class: Optional[Type[ReplayBuffer]] = None,
+        replay_buffer_class: Optional[Type[GPUReplayBuffer]] = None,
         replay_buffer_kwargs: Optional[Dict[str, Any]] = None,
         optimize_memory_usage: bool = False,
         policy_kwargs: Optional[Dict[str, Any]] = None,
@@ -131,7 +131,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         self.gradient_steps = gradient_steps
         self.action_noise = action_noise
         self.optimize_memory_usage = optimize_memory_usage
-        self.replay_buffer: Optional[ReplayBuffer] = None
+        self.replay_buffer: Optional[GPUReplayBuffer] = None
         self.replay_buffer_class = replay_buffer_class
         self.replay_buffer_kwargs = replay_buffer_kwargs or {}
         self._episode_storage = None
@@ -177,7 +177,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
             if isinstance(self.observation_space, spaces.Dict):
                 self.replay_buffer_class = DictReplayBuffer
             else:
-                self.replay_buffer_class = ReplayBuffer
+                self.replay_buffer_class = GPUReplayBuffer
 
         if self.replay_buffer is None:
             # Make a local copy as we should not pickle
@@ -187,7 +187,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
                 assert self.env is not None, "You must pass an environment when using `HerReplayBuffer`"
                 replay_buffer_kwargs["env"] = self.env
             self.replay_buffer = self.replay_buffer_class(
-                self.buffer_size,
+                10,  # TODO: self.buffer_size
                 self.observation_space,
                 self.action_space,
                 device=self.device,
@@ -232,7 +232,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
             If set to ``False``, we assume that we continue the same trajectory (same episode).
         """
         self.replay_buffer = load_from_pkl(path, self.verbose)
-        assert isinstance(self.replay_buffer, ReplayBuffer), "The replay buffer must inherit from ReplayBuffer class"
+        assert isinstance(self.replay_buffer, GPUReplayBuffer), "The replay buffer must inherit from ReplayBuffer class"
 
         # Backward compatibility with SB3 < 2.1.0 replay buffer
         # Keep old behavior: do not handle timeout termination separately
@@ -440,7 +440,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
 
     def _store_transition(
         self,
-        replay_buffer: ReplayBuffer,
+        replay_buffer: GPUReplayBuffer,
         buffer_action: np.ndarray,
         new_obs: Union[np.ndarray, Dict[str, np.ndarray]],
         reward: np.ndarray,
@@ -508,7 +508,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         env: VecEnv,
         callback: BaseCallback,
         train_freq: TrainFreq,
-        replay_buffer: ReplayBuffer,
+        replay_buffer: GPUReplayBuffer,
         action_noise: Optional[ActionNoise] = None,
         learning_starts: int = 0,
         log_interval: Optional[int] = None,
