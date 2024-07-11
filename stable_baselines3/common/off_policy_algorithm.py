@@ -362,7 +362,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
         learning_starts: int,
         action_noise: Optional[ActionNoise] = None,
         n_envs: int = 1,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[th.tensor, th.tensor]:
         """
         Sample an action according to the exploration policy.
         This is either done by sampling the probability distribution of the policy,
@@ -404,7 +404,7 @@ class OffPolicyAlgorithm(BaseAlgorithm):
             # Discrete case, no need to normalize or clip
             buffer_action = unscaled_action
             action = buffer_action
-        return action, buffer_action
+        return th.tensor(action, device=self.env.unwrapped.device), th.tensor(buffer_action, device=self.env.unwrapped.device)
 
     def _dump_logs(self) -> None:
         """

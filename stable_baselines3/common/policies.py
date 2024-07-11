@@ -362,7 +362,9 @@ class BasePolicy(BaseModel, ABC):
                 "and documentation for more information: https://stable-baselines3.readthedocs.io/en/master/guide/vec_envs.html#vecenv-api-vs-gym-api"
             )
 
-        obs_tensor, vectorized_env = self.obs_to_tensor(observation)
+        # obs_tensor, vectorized_env = self.obs_to_tensor(observation) TODO This changed to the following lines, we don't need to transform it to a tensor, as it is one already
+        obs_tensor = observation.clone()
+        vectorized_env = True  # No clue what this is, but setting it to False would break the whole thing
 
         with th.no_grad():
             actions = self._predict(obs_tensor, deterministic=deterministic)

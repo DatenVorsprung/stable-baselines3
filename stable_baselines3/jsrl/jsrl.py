@@ -14,6 +14,7 @@ from pathlib import Path
 from collections import deque
 
 import numpy as np
+import torch as th
 from stable_baselines3.sac.sac import SAC
 from stable_baselines3.common.buffers import GPUReplayBuffer
 from stable_baselines3.common.callbacks import BaseCallback
@@ -57,7 +58,7 @@ class JSSAC(SAC):
         self.reward_threshold = reward_threshold
         self.max_env_steps = env.unwrapped.max_episode_length
         self.current_curriculum = 0
-        self.done_envs = np.zeros(env.num_envs, dtype=bool)
+        self.done_envs = th.zeros(env.num_envs, dtype=th.bool, device=env.unwrapped.device)
         self.reward_achieved = False
         self.reward_mean_buf = deque(maxlen=n_reward_mean)
         self.reward_baseline = None
@@ -163,12 +164,19 @@ class JSSAC(SAC):
             actions_guided = np.concatenate(actions_guided, axis=0)
             buffer_actions_guided = actions_guided
 
-            envs_guide_policy_cond = self.env.unwrapped.time_steps.cpu().numpy() < self.max_env_steps - self.current_curriculum * (self.max_env_steps / self.n_curricula)
-            actions = np.where(envs_guide_policy_cond.reshape(env.num_envs, env.action_space.shape[0]), actions_guided, actions_unguided)
-            buffer_actions = np.where(envs_guide_policy_cond.reshape(env.num_envs, env.action_space.shape[0]), buffer_actions_guided, buffer_actions_unguided)
+            actions_guided = th.tensor(actions_guided, dtype=th.float32, device=env.unwrapped.device)  # TODO dtype
+            buffer_actions_guided = actions_guided.clone()
+
+            envs_guide_policy_cond = self.env.unwrapped.time_steps < self.max_env_steps - self.current_curriculum * (self.max_env_steps / self.n_curricula)
+            actions = th.where(envs_guide_policy_cond.reshape(env.num_envs, env.action_space.shape[0]), actions_guided, actions_unguided)
+            buffer_actions = th.where(envs_guide_policy_cond.reshape(env.num_envs, env.action_space.shape[0]), buffer_actions_guided, buffer_actions_unguided)
 
             # Rescale and perform action
             new_obs, rewards, dones, infos = env.step(actions)
+
+            new_obs = th.tensor(new_obs, dtype=th.float32, device=self.env.unwrapped.device)  # TODO dtype
+            rewards = th.tensor(rewards, dtype=th.float32, device=self.env.unwrapped.device)  # TODO dtype
+            dones = th.tensor(dones, dtype=th.bool, device=self.env.unwrapped.device)  # TODO dtype
 
             self.num_timesteps += env.num_envs
             num_collected_steps += 1
@@ -216,16 +224,16 @@ class JSSAC(SAC):
                         if self.current_curriculum == 0:
                             self.reward_baseline = np.mean(self.reward_mean_buf)
 
-                    self.done_envs[idx] = True
+                    self.done_envs[idx] = th.tensor(True, dtype=th.bool, device=self.device)
 
             # check if the mean reward is above the reward_threshold
             if self.reward_baseline is not None and np.mean(self.reward_mean_buf) >= self.reward_baseline * self.reward_threshold:
                 self.reward_achieved = True
 
             # check if all environments are done and the reward was achieved to start the next curriculum
-            if self.done_envs.all() and self.reward_achieved:
+            if self.done_envs.all().item() and self.reward_achieved:
                 self.current_curriculum += 1
-                self.done_envs = np.zeros(env.num_envs, dtype=bool)
+                self.done_envs = th.zeros(env.num_envs, dtype=th.bool, device=env.unwrapped.device)
                 self.reward_achieved = False
 
         callback.on_rollout_end()
